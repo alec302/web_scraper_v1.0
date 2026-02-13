@@ -18,17 +18,25 @@ def pegar_dados_kabum():
             soup = BeautifulSoup(response.text, 'html.parser')
             script_tag = soup.find('script', id='__NEXT_DATA__')
             
-            # Navegando no JSON da Kabum
+        # 1. Transforma o texto da tag <script> em um dicionário Python
             raw_data = json.loads(script_tag.string)
-            lista_json = raw_data['props']['pageProps']['data']['catalogServer']['data']
+            
+            # 2. O campo 'data' da KaBuM geralmente é uma STRING que contém outro JSON.
+            # Precisamos extrair essa string e dar um novo loads() nela.
+            string_interna_json = raw_data['props']['pageProps']['data']
+            
+            # 3. Agora sim, transformamos a string interna em dicionário
+            dados_internos = json.loads(string_interna_json)
+            
+            # 4. Navegamos até a lista final de produtos
+            lista_final = dados_internos['catalogServer']['data']
 
-            for item in lista_json:
+            for item in lista_final:
                 produtos.append({
                     'nome': item.get('name', 'Sem Nome'),
                     'preco': float(item.get('price', 0)),
                     'link': 'kabum.com.br/produto/' + str(item.get('code'))
                 })
-            
             print(f"Scraper: Encontrei {len(produtos)} produtos.")
             return produtos
             

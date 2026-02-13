@@ -8,7 +8,6 @@ from dotenv import load_dotenv
 # --- CONFIGURAÇÃO ---
 # Cole sua string do MongoDB Atlas aqui
 load_dotenv()
-uri = os.getenv("MONGO_KEY")
 
 
 def processar_e_salvar(lista_bruta):
@@ -34,17 +33,28 @@ def processar_e_salvar(lista_bruta):
     # 2. Adiciona a data de hoje (Importante para o histórico!)
     df['data_coleta'] = datetime.now()
 
-    # 3. Conecta no Mongo e Salva
+    # 2. Pega a URI e verifica se ela existe
+    uri = os.getenv("MONGO_URI")
+    
+    if not uri:
+        print("❌ ERRO: A variável MONGO_URI está vazia ou não foi carregada do .env!")
+        return
+
     try:
+        # 3. Conecta usando a URI do Atlas
         client = MongoClient(uri)
-        db = client['kabum_tracker']     # Nome do Banco
-        col = db['historico_precos']     # Nome da Coleção
         
-        # Converte para lista de dicionários (O Mongo precisa disso)
+        # Testa a conexão imediatamente com um ping
+        client.admin.command('ping')
+        
+        db = client['kabum_tracker']
+        col = db['historico_precos']
+        
         dados_finais = df.to_dict('records')
-        
         col.insert_many(dados_finais)
-        print(f"Sucesso! {len(dados_finais)} registros salvos no MongoDB.")
+        
+        # Mova o print de sucesso para DENTRO do try
+        print(f"--- ✅ Sucesso: {len(dados_finais)} dados salvos no MongoDB Atlas ---")
         
     except Exception as e:
-        print(f"Erro ao salvar no banco: {e}")
+        print(f"❌ Erro ao salvar no banco: {e}")
