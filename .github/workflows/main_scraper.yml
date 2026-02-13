@@ -1,0 +1,39 @@
+name: Execucao Diaria Kabum
+
+# Define quando o robô acorda
+on:
+  schedule:
+    # O GitHub usa o horário UTC. 
+    # 11:00 UTC = 08:00 Horário de Brasília
+    - cron: '0 11 * * *'
+  
+  # Permite que você rode o robô manualmente clicando em um botão no GitHub
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Copia o seu código do repositório para a máquina virtual do GitHub
+      - name: Checkout do código
+        uses: actions/checkout@v3
+
+      # 2. Instala o Python na máquina virtual
+      - name: Configurar Python
+        uses: uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      # 3. Instala as bibliotecas que estão no seu requirements.txt
+      - name: Instalar dependencias
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # 4. Roda o seu script principal
+      - name: Executar Scraper
+        env:
+          # Injeta a sua senha do MongoDB que está escondida nos Secrets do GitHub
+          MONGO_URI: ${{ secrets.MONGO_URI }}
+        run: python main.py
