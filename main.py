@@ -1,5 +1,5 @@
 import os
-from scraper import pegar_dados_kabum
+from web_scraper_kabum import pegar_dados_kabum
 from storage import processar_e_salvar
 from dotenv import load_dotenv
 
