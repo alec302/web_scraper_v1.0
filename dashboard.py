@@ -34,24 +34,24 @@ df_completo = get_data()
 if df_completo.empty:
     st.warning("O banco de dados está vazio. Certifique-se de que o robô rodou.")
 else:
-# --- NOVO: LÓGICA DE FILTRO POR HORA EXATA ---
+    # --- NOVO: LÓGICA DE FILTRO DE DATA ---
     st.sidebar.header("Filtros")
     
-    # 1. Pegamos os carimbos de hora exatos (Timestamp), não só a data
-    # Ordenamos do mais recente para o mais antigo
-    datas_disponiveis = sorted(df_completo['data_coleta'].unique(), reverse=True)
+    # 1. Cria uma lista de datas únicas formatadas (ex: "14/02/2026")
+    # O .dt.date remove as horas, permitindo agrupar coletas do mesmo dia
+    datas_disponiveis = sorted(df_completo['data_coleta'].dt.date.unique(), reverse=True)
     
-    # 2. Selectbox agora escolhe uma COLETA ESPECÍFICA
-    # Usamos format_func para mostrar a hora bonita na caixinha
-    data_escolhida = st.sidebar.selectbox(
-        "Escolha a coleta (Data/Hora):", 
-        datas_disponiveis,
-        format_func=lambda x: pd.to_datetime(x).strftime("%d/%m/%Y às %H:%M:%S")
-    )
+    # 2. O Selectbox para o usuário escolher
+    data_escolhida = st.sidebar.selectbox("Escolha a data da coleta:", datas_disponiveis)
     
-    # 3. Filtra EXATAMENTE por aquele carimbo de tempo
-    # Agora ele vai pegar só os 20 itens daquela execução específica
-    df_hoje = df_completo[df_completo['data_coleta'] == data_escolhida].copy()
+    # 3. Filtra o DataFrame original pela data escolhida
+    # Comparamos apenas a parte do .date (dia/mês/ano) ignorando a hora exata
+    df_hoje = df_completo[df_completo['data_coleta'].dt.date == data_escolhida].copy()
+
+    # --- FIM DO NOVO BLOCO ---
+
+    # Daqui para baixo, a lógica continua igual, mas usando o df filtrado pelo usuário
+    df_hoje['ddr'] = "DDR" + df_hoje['ddr'].astype(str)
     
     # Filtro de Geração (continua igual)
     geracao = st.sidebar.multiselect(
