@@ -5,21 +5,13 @@ from pymongo import MongoClient
 import os
 from dotenv import load_dotenv
 
-# 1. ZOOM E LAYOUT
-st.set_page_config(page_title="KaBuM! Tracker", layout="wide")
-
-# Injeta CSS para diminuir a escala e melhorar o aproveitamento de tela
-st.markdown("""
-    <style>
-        html { zoom: 0.9; } /* Zoom padrão de entrada */
-        .main { padding-top: 2rem; }
-        div.stMetric { background-color: #1e1e1e; padding: 15px; border-radius: 10px; }
-    </style>
-    """, unsafe_allow_html=True)
+# Configuração da página
+st.set_page_config(page_title="Monitor de Preços KaBuM!", layout="wide")
 
 @st.cache_resource
 def init_connection():
     load_dotenv()
+    # Tenta pegar a URI do Streamlit Secrets ou do .env local
     uri = st.secrets.get("MONGO_URI") or os.getenv("MONGO_URI")
     return MongoClient(uri)
 
@@ -27,60 +19,68 @@ def init_connection():
 def get_data():
     client = init_connection()
     db = client['kabum_tracker']
-    df = pd.DataFrame(list(db['historico_precos'].find({}, {'_id': 0})))
+    colecao = db['historico_precos']
+    
+    # Busca os dados e converte para DataFrame
+    df = pd.DataFrame(list(colecao.find({}, {'_id': 0})))
+    
     if not df.empty:
+        # Garante que a data está no formato correto
         df['data_coleta'] = pd.to_datetime(df['data_coleta'])
     return df
 
-st.title("📊 Monitor de Preços: Memória RAM")
+# --- INTERFACE ---
+st.title("📊 Monitor de Memórias RAM - KaBuM!")
 
-df_raw = get_data()
+df_completo = get_data()
 
-if not df_raw.empty:
-    # FILTRO DE DATA (Última coleta)
-    ultima_data = df_raw['data_coleta'].max()
-    df = df_raw[df_raw['data_coleta'] == ultima_data].copy()
+if df_completo.empty:
+    st.warning("O banco de dados está vazio. Certifique-se de que o robô (main.py) rodou com sucesso.")
+else:
+    # 1. PEGAR APENAS A COLETA MAIS RECENTE (Evita somar preços históricos)
+    ultima_data = df_completo['data_coleta'].max()
+    df_hoje = df_completo[df_completo['data_coleta'] == ultima_data].copy()
 
-    # --- TRATAMENTO PARA LIMPAR O VISUAL ---
-    # 1. Encurta o nome para não ocupar metade da tela
-    df['nome_exibicao'] = df['nome'].apply(lambda x: x[:45] + "..." if len(x) > 45 else x)
-    # 2. DDR como categoria
-    df['ddr'] = "DDR" + df['ddr'].astype(str)
-
-    # --- FILTROS ---
-    st.sidebar.header("Configurações")
-    # Slider para limitar a quantidade de itens e o gráfico não ficar gigante
-    top_n = st.sidebar.slider("Mostrar quantos produtos?", 5, 30, 15)
+    # 2. LIMPEZA DOS DADOS PARA O GRÁFICO
+    # Transforma DDR em texto para a legenda não virar uma barra de gradiente
+    df_hoje['ddr'] = "DDR" + df_hoje['ddr'].astype(str)
     
-    df_plot = df.sort_values('preco').head(top_n)
+    # --- FILTROS LATERAIS ---
+    st.sidebar.header("Filtros de Hoje")
+    geracao = st.sidebar.multiselect("Geração:", options=df_hoje['ddr'].unique(), default=df_hoje['ddr'].unique())
+    
+    df_filtrado = df_hoje[df_hoje['ddr'].isin(geracao)]
 
-    # --- GRÁFICO ---
-    st.subheader(f"Top {top_n} Memórias mais baratas ({ultima_data.strftime('%d/%m %H:%M')})")
+    # --- INDICADORES ---
+    col1, col2 = st.columns(2)
+    col1.metric("Última Atualização", ultima_data.strftime("%d/%m/%Y %H:%M"))
+    col2.metric("Produtos Encontrados", len(df_filtrado))
 
+    # --- GRÁFICO DE BARRAS (CORRIGIDO) ---
+    st.subheader("Comparativo de Preços Atuais")
+    
     fig = px.bar(
-        df_plot,
+        df_filtrado.sort_values('preco', ascending=True),
         x='preco',
-        y='nome_exibicao',
-        color='ddr',
+        y='nome',
+        color='ddr', # Agora as cores serão categorias fixas
         orientation='h',
         text='preco',
-        # Hover mostra o nome completo original
-        hover_data={'nome': True, 'nome_exibicao': False, 'preco': ':.2f'},
-        labels={'preco': 'Preço (R$)', 'nome_exibicao': 'Modelo', 'ddr': 'Tipo'},
-        color_discrete_map={'DDR4': '#1f77b4', 'DDR5': '#ff7f0e', 'DDR3': '#d62728'}
+        labels={'preco': 'Preço (R$)', 'nome': 'Modelo', 'ddr': 'Tipo'},
+        # Cores específicas para facilitar a batida de olho
+        color_discrete_map={'DDR4': '#1f77b4', 'DDR5': '#ff7f0e'}
     )
 
+    # Ajustes finos no visual
     fig.update_traces(texttemplate='R$ %{text:.2f}', textposition='outside')
-    
     fig.update_layout(
-        margin=dict(l=200, r=100, t=20, b=20), # Aumenta margem esquerda para os nomes
-        height=500 + (top_n * 10), # Altura dinâmica
-        xaxis_title="Preço (R$)",
-        yaxis_title="",
-        showlegend=True,
-        legend_title_text="Geração"
+        yaxis={'categoryorder':'total ascending'},
+        height=600,
+        margin=dict(l=0, r=50, t=30, b=0)
     )
 
     st.plotly_chart(fig, use_container_width=True)
-else:
-    st.info("Aguardando primeira coleta do robô...")
+
+    # --- TABELA DETALHADA ---
+    with st.expander("Ver lista completa de preços"):
+        st.dataframe(df_filtrado.sort_values('preco'))
